@@ -1,14 +1,10 @@
+import jobManager from "jobs/jobManager";
 import { BaseCreep } from "./base";
 
-export interface HarvesterMemory extends CreepMemory {
-    sourceId?: Id<Source>;
-}
 
 export class HarvesterCreep extends BaseCreep {
-    public memory : HarvesterMemory;
     constructor(creep : Creep) {
         super(creep);
-        this.memory = creep.memory as HarvesterMemory;
     }
 
     public run() : void {
@@ -20,20 +16,21 @@ export class HarvesterCreep extends BaseCreep {
         }
     }
 
-    public findWork() : boolean {
-        const source = this.findSource();
-        if(!source) return this.setNotWorking("No source found");
+    // public findWork() : boolean {
+    //     const source = this.findSource();
+    //     if(!source) return this.setNotWorking("No source found");
 
-        this.memory.sourceId = source.id;
-        this.memory.working = true;
-        return true;
-    }
+    //     this.memory.sourceId = source.id;
+    //     this.memory.working = true;
+    //     return true;
+    // }
 
     public work() : boolean {
-        if(!this.memory.sourceId) return this.setNotWorking("No sourceId found");
+        if(!this.memory.jobId) return this.setNotWorking("No job found")
+        const job = jobManager.getJobById(this.memory.jobId);
+        if(!job) return this.setNotWorking("Job not found");
 
-        const target = Game.getObjectById(this.memory.sourceId);
-        if(!target) return this.setNotWorking("No target found");
+        const target = Game.getObjectById(job.targetId) as Source;
 
         if(this.creep.store.getFreeCapacity("energy") == 0) {
             return this.deposit();
@@ -41,7 +38,7 @@ export class HarvesterCreep extends BaseCreep {
 
 
         if(this.creep.harvest(target) == ERR_NOT_IN_RANGE) {
-            this.creep.moveTo(target);
+            this.creep.moveTo(target, {reusePath: 10});
         }
 
         return true;
@@ -63,30 +60,14 @@ export class HarvesterCreep extends BaseCreep {
     }
 
     private deposit() : boolean {
-        let target = this.creep.pos.findClosestByPath(FIND_MY_SPAWNS, {
-            filter : (structure) => {
-                return (structure.structureType == STRUCTURE_SPAWN && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
-            }
-        });
-        if(!target) {
-            target = this.creep.pos.findClosestByPath(FIND_MY_STRUCTURES, {
-                filter : (structure) => {
-                    return (structure.structureType == STRUCTURE_STORAGE && structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
-                }
-            })
-            if(!target) return this.setNotWorking("No target found")
-        }
-
-        if(this.creep.transfer(target, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
-            this.creep.moveTo(target);
-        }
-        return true;
+        this.creep.drop("energy", this.creep.store.getUsedCapacity("energy"));
+        return true
     }
 
     public setNotWorking(reason?: string) : boolean {
         this.memory.working = false;
-        this.memory.sourceId = undefined;
+        this.memory.jobId = null;
         if(reason) this.creep.say(reason);
-        return false;
+        return this.findWork();
     }
 }

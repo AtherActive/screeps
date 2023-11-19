@@ -1,4 +1,5 @@
 import { BaseCreep } from "./base";
+import { UpgradeCreep } from "./upgrader";
 
 export interface BuilderMemory extends CreepMemory {
     sourceId?: Id<ConstructionSite>;
@@ -23,7 +24,10 @@ export class BuilderCreep extends BaseCreep {
 
     public findWork() : boolean {
         const closestSite = this.creep.pos.findClosestByPath(FIND_CONSTRUCTION_SITES);
-        if(!closestSite) return this.setNotWorking("No site found");
+        if(!closestSite) {
+            this.moveToAfkSpot();
+            return this.setNotWorking("💤");
+        }
 
         this.memory.working = true;
         this.memory.sourceId = closestSite.id;
@@ -47,26 +51,18 @@ export class BuilderCreep extends BaseCreep {
         return true;
     }
 
-    private getEnergyFromStorage() : boolean {
-        const storage = this.creep.pos.findClosestByPath(FIND_MY_SPAWNS, {
-            filter: (structure) => {
-                return structure.store.getUsedCapacity(RESOURCE_ENERGY) > 250 && structure.spawning == null;
-            }
-        })
-        if(!storage) return this.setNotWorking("no storage found");
-
-        const carryAmount = this.creep.store.getUsedCapacity(RESOURCE_ENERGY);
-        if(this.creep.withdraw(storage, RESOURCE_ENERGY, carryAmount) == ERR_NOT_IN_RANGE) {
-            this.creep.moveTo(storage);
-        }
-
-        return true;
-    }
-
     public setNotWorking(reason?: string) : boolean {
         this.memory.working = false;
         this.memory.sourceId = undefined;
         if(reason) this.creep.say(reason);
         return false;
+    }
+
+    public helpICantDoAnything() : boolean {
+        this.memory.sourceId = undefined;
+        this.memory.working = false;
+        const newJob = new UpgradeCreep(this.creep);
+        newJob.run();
+        return true;
     }
 }

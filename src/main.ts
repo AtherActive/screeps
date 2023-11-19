@@ -1,10 +1,16 @@
 import { BaseCreep } from "creeps/base";
 import { BuilderCreep } from "creeps/builder";
 import { HarvesterCreep } from "creeps/harvester";
+import { HaulerCreep } from "creeps/hauler";
+import { RepairCreep } from "creeps/repair";
 import { UpgradeCreep } from "creeps/upgrader";
+import { Job } from "jobs/job";
+import jobManager, { JobManager, JobManagerMemory } from "jobs/jobManager";
 import { Spawner } from "spawner/spawner";
 import { CreepRole } from "types";
 import { ErrorMapper } from "utils/ErrorMapper";
+import { turret as Turret } from "tempturret";
+import { ROOM_ID } from "./constants";
 
 declare global {
   /*
@@ -19,52 +25,80 @@ declare global {
   interface Memory {
     uuid: number;
     log: any;
+    jobManager: JobManagerMemory;
   }
 
   interface CreepMemory {
     role: CreepRole;
     room: string;
     working: boolean;
+    jobId: string | null;
   }
 
   // Syntax for adding proprties to `global` (ex "global.log")
   namespace NodeJS {
     interface Global {
       log: any;
+      getJobById: (id: string) => Job | undefined;
     }
   }
 }
-
+//@ts-ignore
+global.jobManager = jobManager;
 // When compiling TS to JS and bundling with rollup, the line numbers and file names in error messages change
 // This utility uses source maps to get the line numbers and file names of the original, TS source code
 export const loop = ErrorMapper.wrapLoop(() => {
-  console.log(`Current game tick is ${Game.time}, CPU time: ${Math.round(Game.cpu.getUsed()/Game.cpu.limit*100)}%`);
-  const spawner = new Spawner();
+    console.log(`Current game tick is ${Game.time}`);
+    jobManager.loop();
+    const spawner = new Spawner();
 
-  // Automatically delete memory of missing creeps
-  for (const name in Memory.creeps) {
-    if (!(name in Game.creeps)) {
-      delete Memory.creeps[name];
-    }
+    // Automatically delete memory of missing creeps
+    for (const name in Memory.creeps) {
+        if (!(name in Game.creeps)) {
+          delete Memory.creeps[name];
+          console.log("[RIP] ", name)
+          return
+        }
 
-    const creep = Game.creeps[name];
-    const role = creep.memory.role;
+        const creep = Game.creeps[name];
+        const role = creep.memory.role;
 
-    let instance: BaseCreep | null
-    switch(role) {
-      case "harvester":
-        instance = new HarvesterCreep(creep);
-        break;
-      case "upgrader":
-        instance = new UpgradeCreep(creep);
-        break;
-      case "builder":
-        instance = new BuilderCreep(creep);
-        break;
-      default:
-        instance = null;
-    }
-    if(instance === null) return console.error(`No instance for role ${name}`)
-    instance.run();
-  }
+        let instance: BaseCreep | null
+        switch(role) {
+          case "harvester":
+            instance = new HarvesterCreep(creep);
+            break;
+          case "upgrader":
+            instance = new UpgradeCreep(creep);
+            break;
+          case "builder":
+            instance = new BuilderCreep(creep);
+            break;
+          case "repairer":
+            instance = new RepairCreep(creep);
+            break;
+          case "hauler":
+            instance = new HaulerCreep(creep);
+            break;
+          default:
+            instance = null;
+        }
+        if(instance !== null) instance.run();
+
+      }
+
+      const turret = Game.rooms[ROOM_ID].find(FIND_STRUCTURES, {
+        filter: (structure) => {
+          return structure.structureType == STRUCTURE_TOWER;
+        }
+      })
+      if(turret) {
+        for(const t of turret) {
+          Turret(t as StructureTower);
+        }
+      }
+
+    jobManager.save();
+    console.log(`End of tick, CPU: ${Math.round(Game.cpu.getUsed()/(Game.cpu.limit)*100)}%`)
+    console.log(``)
 });

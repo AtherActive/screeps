@@ -27,7 +27,7 @@ export class UpgradeCreep extends BaseCreep {
         if(!target) return this.setNotWorking("No target found");
 
         if(this.creep.store.getUsedCapacity("energy") == 0) {
-            return this.withdraw();
+            return this.getEnergyFromStorage();
         }
 
         if(this.creep.upgradeController(target) == ERR_NOT_IN_RANGE) {
